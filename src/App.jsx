@@ -890,7 +890,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                     <button key={n} onClick={() => usePortions(item.id, n)} style={{ flex: 1, padding: "7px 4px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c05621", fontWeight: "bold" }}>
                       Use {n}
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
             );
@@ -955,13 +955,13 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                         🔄 Replace
                       </button>
                     </div>
-                  ))}
+                  )}
                   <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                     <Btn label={`💾 Save ${Object.values(selectedToSave).filter(Boolean).length} Recipe${Object.values(selectedToSave).filter(Boolean).length !== 1 ? 's' : ''}`} onClick={saveSelectedRecipes} style={{ flex: 1 }} disabled={!Object.values(selectedToSave).some(Boolean)} />
                     <Btn label="Cancel" onClick={() => setShowSavePanel(false)} color="#aaa" small />
                   </div>
                 </div>
-              ))}
+              )}
             </Card>
           )}
 
@@ -996,7 +996,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
             <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
               {["👶 Inez", "👦 Finlay", "🍽️ Adults"].map((label, i) => (
                 <div key={i} style={{ padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: "bold", background: i === 0 ? "#fff8f0" : i === 1 ? "#f0f8ff" : "#f5f5f5", border: `1.5px solid ${i === 0 ? "#f4a261" : i === 1 ? "#90cdf4" : "#ddd"}`, color: i === 0 ? "#c05621" : i === 1 ? "#2b6cb0" : "#555" }}>{label}</div>
-              ))}
+              )}
             </div>
             <StableTextarea value={weekendNote} onBlur={setWeekendNote} placeholder="Any notes? e.g. 'keep it simple', 'use up chicken'..." rows={2} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #eee", fontSize: 13, fontFamily: "Georgia,serif", marginBottom: 14, boxSizing: "border-box", resize: "none" }} />
             <Btn label={weekendLoading ? `⏳ ${weekendMsg}` : "🗓️ Plan Our Weekend Meals"} onClick={generateWeekendPlan} disabled={weekendLoading} style={{ width: "100%" }} />
@@ -1011,7 +1011,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
               <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
                 {[["👶 Inez", "#fff8f0", "#f4a261", "#c05621"], ["👦 Finlay", "#f0f8ff", "#90cdf4", "#2b6cb0"], ["🍽️ Adults", "#f5f5f5", "#ddd", "#555"]].map(([label, bg, border, color], i) => (
                   <div key={i} style={{ padding: "4px 10px", borderRadius: 16, fontSize: 11, background: bg, border: `1.5px solid ${border}`, color }}>{label}</div>
-                ))}
+                )}
                 <div style={{ padding: "4px 10px", borderRadius: 16, fontSize: 11, background: "#fff0f5", border: "1.5px solid #feb2b2", color: "#c53030" }}>🆘 Finlay Fallback</div>
               </div>
               <FormatWeekend text={weekendPlan} />
