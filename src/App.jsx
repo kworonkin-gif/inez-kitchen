@@ -68,12 +68,9 @@ ALWAYS include:
 
 const TABS = ["❄️ Fridge", "🍳 Batch Cook", "☀️ Day Planner", "👨‍👩‍👧‍👦 Weekend", "📖 Recipes", "🛒 Shopping"];
 
-// Assume Inez eats 3 meals + 2 snacks = 5 eating occasions per day
-// Each portion = 1 meal. Snacks count as 0.5 portions for simplicity.
 const MEALS_PER_DAY = 3;
 
 // StableInput and StableTextarea - use refs to prevent keyboard dismissal on Android
-// These look controlled from outside but never re-render on keystroke internally
 function StableInput({ value, onBlur, placeholder, style }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -111,7 +108,6 @@ function StableTextarea({ value, onBlur, placeholder, rows, style }) {
   );
 }
 
-// Uncontrolled form - uses refs not state so typing never triggers re-renders
 function AddFridgeForm({ onAdd }) {
   const inputRef = React.useRef(null);
   const [portions, setPortions] = useState(5);
@@ -147,7 +143,7 @@ function AddFridgeForm({ onAdd }) {
 
 export default function MealPlanner() {
   const [apiKey, setApiKey] = useState(() => {
-    try { return localStorage.getItem("inez_api_key") || ""; } catch { return ""; }
+    try { return localStorage.getItem("inez_gemini_key") || ""; } catch { return ""; }
   });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [tab, setTab] = useState(0);
@@ -160,33 +156,33 @@ export default function MealPlanner() {
           <div style={{ textAlign: "center", marginBottom: 24 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🍳</div>
             <h1 style={{ fontSize: 22, color: "#2c3e50", marginBottom: 8 }}>Inez's Kitchen</h1>
-            <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6 }}>One-time setup. You'll need a free Anthropic API key to power the recipe generator.</p>
+            <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6 }}>One-time setup. Enter your free Google Gemini API key to power the recipe generator.</p>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <p style={{ fontSize: 13, color: "#555", marginBottom: 8, fontWeight: "bold" }}>Your Anthropic API Key:</p>
+            <p style={{ fontSize: 13, color: "#555", marginBottom: 8, fontWeight: "bold" }}>Your Gemini API Key:</p>
             <input
               type="password"
               value={apiKeyInput}
               onChange={e => setApiKeyInput(e.target.value)}
-              placeholder="sk-ant-..."
+              placeholder="AIza..."
               style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, fontFamily: "Georgia,serif", boxSizing: "border-box", marginBottom: 8 }}
             />
-            <p style={{ fontSize: 11, color: "#aaa", lineHeight: 1.6 }}>Get your free key at <strong>console.anthropic.com</strong> → API Keys. Your key is stored only on this device.</p>
+            <p style={{ fontSize: 11, color: "#aaa", lineHeight: 1.6 }}>Get your free key at <strong>aistudio.google.com</strong> → Get API key. Your key is stored only on this device.</p>
           </div>
           <button
             onClick={() => {
               const key = apiKeyInput.trim();
-              if (key.startsWith("sk-")) {
-                localStorage.setItem("inez_api_key", key);
+              if (key.length > 10) {
+                localStorage.setItem("inez_gemini_key", key);
                 setApiKey(key);
               } else {
-                alert("Please enter a valid API key starting with sk-ant-");
+                alert("Please enter a valid Gemini API key (starts with AIza...)");
               }
             }}
             style={{ width: "100%", padding: "14px", background: "linear-gradient(135deg,#e76f51,#f4a261)", color: "white", border: "none", borderRadius: 12, fontSize: 15, fontWeight: "bold", cursor: "pointer", fontFamily: "Georgia,serif" }}>
             Let's Go 🎉
           </button>
-          <p style={{ fontSize: 11, color: "#bbb", textAlign: "center", marginTop: 12 }}>Cost: approx £3-8/month depending on usage</p>
+          <p style={{ fontSize: 11, color: "#bbb", textAlign: "center", marginTop: 12 }}>Free tier — no credit card needed</p>
         </div>
       </div>
     );
@@ -196,18 +192,14 @@ export default function MealPlanner() {
     try { return JSON.parse(localStorage.getItem("inez_v4") || "[]"); } catch { return []; }
   });
 
-  // Fridge stock
   const [fridgeItems, setFridgeItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem("inez_fridge") || "[]"); } catch { return []; }
   });
-  const [newFridgeName, setNewFridgeName] = useState("");
-  const [newFridgePortions, setNewFridgePortions] = useState(5);
   const [addingFridge, setAddingFridge] = useState(false);
 
-  // Batch cook
   const [weekPlan, setWeekPlan] = useState(null);
-  const [parsedRecipes, setParsedRecipes] = useState([]); // extracted individual recipes from batch
-  const [selectedToSave, setSelectedToSave] = useState({}); // which recipes user wants to save
+  const [parsedRecipes, setParsedRecipes] = useState([]);
+  const [selectedToSave, setSelectedToSave] = useState({});
   const [showSavePanel, setShowSavePanel] = useState(false);
   const [nutrientFlags, setNutrientFlags] = useState(null);
   const [shoppingList, setShoppingList] = useState(() => {
@@ -218,13 +210,11 @@ export default function MealPlanner() {
   const [leftovers, setLeftovers] = useState("");
   const [useLeftovers, setUseLeftovers] = useState(false);
 
-  // Day planner
   const [dayPlan, setDayPlan] = useState(null);
   const [dayLoading, setDayLoading] = useState(false);
   const [dayNote, setDayNote] = useState("");
   const [includeEggs, setIncludeEggs] = useState(true);
 
-  // Weekend planner
   const [weekendPlan, setWeekendPlan] = useState(null);
   const [weekendLoading, setWeekendLoading] = useState(false);
   const [weekendMsg, setWeekendMsg] = useState("");
@@ -234,12 +224,10 @@ export default function MealPlanner() {
   });
   const [weekendShoppingLoading, setWeekendShoppingLoading] = useState(false);
 
-  // Shopping checklist
   const [checkedItems, setCheckedItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem("inez_checked") || "{}"); } catch { return {}; }
   });
 
-  // Recipe book
   const [expandedRecipe, setExpandedRecipe] = useState(null);
   const [addingRecipe, setAddingRecipe] = useState(false);
   const [newName, setNewName] = useState("");
@@ -261,22 +249,17 @@ export default function MealPlanner() {
   }, [fridgeItems]);
 
   useEffect(() => {
-    try {
-      if (shoppingList) localStorage.setItem("inez_shopping", shoppingList);
-    } catch {}
+    try { if (shoppingList) localStorage.setItem("inez_shopping", shoppingList); } catch {}
   }, [shoppingList]);
 
   useEffect(() => {
-    try {
-      if (weekendShoppingList) localStorage.setItem("inez_weekend_shopping", weekendShoppingList);
-    } catch {}
+    try { if (weekendShoppingList) localStorage.setItem("inez_weekend_shopping", weekendShoppingList); } catch {}
   }, [weekendShoppingList]);
 
   useEffect(() => {
     try { localStorage.setItem("inez_checked", JSON.stringify(checkedItems)); } catch {}
   }, [checkedItems]);
 
-  // Fridge calculations
   const totalPortions = fridgeItems.reduce((sum, item) => sum + item.portions, 0);
   const daysLeft = Math.floor(totalPortions / MEALS_PER_DAY);
   const needsToCook = daysLeft < 2;
@@ -289,25 +272,9 @@ export default function MealPlanner() {
     return { msg: `You have roughly ${daysLeft} days of food in the fridge. No need to cook yet!`, color: "#2d6a4f", bg: "#f0faf4", icon: "✅" };
   }, [fridgeItems, daysLeft, needsToCook, cookSoon]);
 
-  function addFridgeItem() {
-    if (!newFridgeName.trim()) return;
-    const now = new Date();
-    const item = {
-      id: Date.now(),
-      name: newFridgeName.trim(),
-      portions: newFridgePortions,
-      originalPortions: newFridgePortions,
-      addedDate: now.toLocaleDateString("en-GB"),
-      addedTimestamp: now.getTime()
-    };
-    setFridgeItems(p => [item, ...p]);
-    setNewFridgeName(""); setNewFridgePortions(5); setAddingFridge(false);
-  }
-
   function getDaysAgo(timestamp) {
     if (!timestamp) return null;
-    const diff = Date.now() - timestamp;
-    return Math.floor(diff / (1000 * 60 * 60 * 24));
+    return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
   }
 
   const fridgeItemAge = useCallback((item) => {
@@ -317,52 +284,50 @@ export default function MealPlanner() {
     if (days === 1) return { label: "Added yesterday", color: "#2d6a4f", warn: false, danger: false };
     if (days <= 3) return { label: `${days} days ago`, color: "#b7950b", warn: false, danger: false };
     if (days === 4) return { label: `${days} days ago — use or freeze today!`, color: "#e07b39", warn: true, danger: false };
-    if (days >= 5) return { label: `${days} days ago — DO NOT USE if not frozen`, color: "#c0392b", warn: true, danger: true };
-    return null;
+    return { label: `${days} days ago — DO NOT USE if not frozen`, color: "#c0392b", warn: true, danger: true };
   }, []);
 
   function usePortions(id, n) {
-    setFridgeItems(p => p.map(item => {
-      if (item.id !== id) return item;
-      const newP = Math.max(0, item.portions - n);
-      return { ...item, portions: newP };
-    }).filter(item => item.portions > 0));
+    setFridgeItems(p => p.map(item => item.id !== id ? item : { ...item, portions: Math.max(0, item.portions - n) }).filter(item => item.portions > 0));
   }
 
   function removeFridgeItem(id) {
     setFridgeItems(p => p.filter(item => item.id !== id));
   }
 
-  // Standard API call (used for shopping lists, day plans, weekend plans)
-  async function callClaude(prompt, sys) {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 6000,
-        system: sys || INEZ_CONTEXT,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
+  // ── GEMINI API CALLS ──
+
+  async function callGemini(prompt, systemPrompt) {
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: { maxOutputTokens: 6000, temperature: 0.9 }
+        })
+      }
+    );
     const d = await res.json();
     if (d.error) { console.error(d.error); throw new Error(d.error.message); }
-    return d.content?.map(b => b.text || "").join("") || "";
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 
-  // Streaming API call - text appears word by word as it generates
-  async function callClaudeStream(prompt, sys, onChunk) {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 6000,
-        stream: true,
-        system: sys || INEZ_CONTEXT,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
+  async function callGeminiStream(prompt, systemPrompt, onChunk) {
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: { maxOutputTokens: 6000, temperature: 0.9 }
+        })
+      }
+    );
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
@@ -374,8 +339,9 @@ export default function MealPlanner() {
       for (const line of lines) {
         try {
           const data = JSON.parse(line.slice(6));
-          if (data.type === "content_block_delta" && data.delta?.text) {
-            fullText += data.delta.text;
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            fullText += text;
             onChunk(fullText);
           }
         } catch {}
@@ -392,7 +358,6 @@ export default function MealPlanner() {
     const fridgeNote = fridgeItems.length > 0 ? `Already in fridge (avoid duplicating these meals): ${fridgeItems.map(f => f.name).join(", ")}.` : "";
     const leftoverNote = useLeftovers && leftovers.trim() ? `USE THESE INGREDIENTS from the fridge/pantry in at least 2 recipes: ${leftovers}` : "";
     try {
-      // Stream the recipes so text appears immediately
       const recipePrompt = `${prev}\n${dislikeNote}\n${fridgeNote}\n${leftoverNote}
 
 Generate exactly 4 batch cook recipes. Different protein in each, different carb in each. Interesting flavours. No muffins or baked goods. Minimal oil in all recipes.
@@ -427,13 +392,12 @@ FREEZING: [instructions]
 [snack] — [why good + how to serve]
 [snack] — [why good + how to serve]`;
 
-      // Stream recipes - text appears immediately as it generates
       let finalResult = "";
-      await callClaudeStream(recipePrompt, INEZ_CONTEXT, (partial) => {
+      await callGeminiStream(recipePrompt, INEZ_CONTEXT, (partial) => {
         setWeekPlan(partial);
         finalResult = partial;
       });
-      // Parse individual recipes from the generated plan
+
       const lines = finalResult.split('\n');
       const parsed = [];
       let current = null;
@@ -454,14 +418,13 @@ FREEZING: [instructions]
       setSelectedToSave(sel);
       setShowSavePanel(false);
 
-      // Run nutrient check in parallel while user reads recipes
       setBatchMsg("Checking nutrients...");
-      const flags = await callClaude(
+      const flags = await callGemini(
         `Review these 4 recipes and snacks for a 20-month-old with Sotos syndrome on a reflux diet with no cow protein, minimal oil. Flag MISSING or LOW nutrients (iron, calcium alternatives, omega-3, zinc, vitamin D, fibre, vitamin C, iodine). Bullet points only. Suggest fixes using only allowed ingredients.\n\n${finalResult}`,
         "You are a paediatric nutritionist. Be concise."
       );
       setNutrientFlags(flags);
-    } catch { setWeekPlan("Something went wrong. Please try again."); }
+    } catch (e) { setWeekPlan("Something went wrong. Please try again. Error: " + e.message); }
     setBatchLoading(false);
   }
 
@@ -469,7 +432,7 @@ FREEZING: [instructions]
     if (!weekPlan) return;
     setBatchLoading(true); setBatchMsg("Building shopping list...");
     try {
-      const result = await callClaude(`Consolidated shopping list from these recipes and snacks. Groups: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, FRUIT:, PANTRY & HERBS:. Combine duplicates. Piggyback snacks don't need separate ingredients.\n\n${weekPlan}`);
+      const result = await callGemini(`Consolidated shopping list from these recipes and snacks. Groups: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, FRUIT:, PANTRY & HERBS:. Combine duplicates. Piggyback snacks don't need separate ingredients.\n\n${weekPlan}`);
       setShoppingList(result);
     } catch { setShoppingList("Something went wrong."); }
     setBatchLoading(false);
@@ -478,7 +441,7 @@ FREEZING: [instructions]
   async function generateWeekendPlan() {
     setWeekendLoading(true); setWeekendMsg("Planning your weekend meals..."); setWeekendPlan(null); setWeekendShoppingList(null);
     try {
-      const result = await callClaude(`Plan Saturday AND Sunday shared family meals. For each day: Lunch and Dinner.
+      const result = await callGemini(`Plan Saturday AND Sunday shared family meals. For each day: Lunch and Dinner.
 ${weekendNote ? `Note from mum: ${weekendNote}` : ""}
 
 CRITICAL RULES:
@@ -538,7 +501,7 @@ Adults: [full version]
     if (!weekendPlan) return;
     setWeekendShoppingLoading(true);
     try {
-      const result = await callClaude(`Create a consolidated weekend shopping list from these 4 family meals. Remember no cow protein/dairy for Inez. Group by: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, PANTRY & HERBS:. Combine duplicates.\n\n${weekendPlan}`, FAMILY_CONTEXT);
+      const result = await callGemini(`Create a consolidated weekend shopping list from these 4 family meals. Remember no cow protein/dairy for Inez. Group by: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, PANTRY & HERBS:. Combine duplicates.\n\n${weekendPlan}`, FAMILY_CONTEXT);
       setWeekendShoppingList(result);
     } catch { setWeekendShoppingList("Something went wrong."); }
     setWeekendShoppingLoading(false);
@@ -549,7 +512,7 @@ Adults: [full version]
     const bank = recipes.filter(r => r.rating >= 3).map(r => r.name);
     const fridgeStock = fridgeItems.length > 0 ? `Currently in fridge: ${fridgeItems.map(f => `${f.name} (${f.portions} portions)`).join(", ")}. Prioritise using these.` : "";
     try {
-      const result = await callClaude(`Plan a full balanced day for Inez. Breakfast, Morning Snack, Lunch, Afternoon Snack, Dinner.
+      const result = await callGemini(`Plan a full balanced day for Inez. Breakfast, Morning Snack, Lunch, Afternoon Snack, Dinner.
 Rules: different protein each meal, different carb each meal, varied veg, substantial snacks. Minimal oil only.
 ${includeEggs ? "Include at least one egg meal or egg yolk addition." : ""}
 ${bank.length ? `Favourite recipes: ${bank.join(", ")}` : ""}
@@ -560,7 +523,7 @@ Format each meal:
 MEAL NAME
 Protein: / Carb: / Veg: / How to prepare: / Nutrition note:
 
-End with DAILY NUTRITION SUMMARY listing proteins, carbs, veg and any gaps.`);
+End with DAILY NUTRITION SUMMARY listing proteins, carbs, veg and any gaps.`, INEZ_CONTEXT);
       setDayPlan(result);
     } catch { setDayPlan("Something went wrong."); }
     setDayLoading(false);
@@ -570,10 +533,31 @@ End with DAILY NUTRITION SUMMARY listing proteins, carbs, veg and any gaps.`);
     setIdeaLoading(true); setRecipeIdea(null);
     const used = recipes.map(r => r.name).join(", ");
     try {
-      const result = await callClaude(`One creative new recipe for Inez.${used ? ` Already made: ${used}.` : ""} Full recipe, 5 portions, interesting flavours, minimal oil, no muffins or dry baked goods. Flag egg yolk opportunity. Suggest one piggyback snack from same ingredients.`);
+      const result = await callGemini(`One creative new recipe for Inez.${used ? ` Already made: ${used}.` : ""} Full recipe, 5 portions, interesting flavours, minimal oil, no muffins or dry baked goods. Flag egg yolk opportunity. Suggest one piggyback snack from same ingredients.`, INEZ_CONTEXT);
       setRecipeIdea(result);
     } catch { setRecipeIdea("Something went wrong."); }
     setIdeaLoading(false);
+  }
+
+  async function regenerateRecipe(recipeNumber) {
+    const toKeep = parsedRecipes.filter(r => r.number !== recipeNumber).map(r => r.name);
+    const keepNote = toKeep.length ? `Keep these exact recipes, only replace Recipe ${recipeNumber}: ${toKeep.join(", ")}` : "";
+    setBatchLoading(true); setBatchMsg(`Regenerating Recipe ${recipeNumber}...`);
+    try {
+      const result = await callGemini(`${keepNote}
+Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is different to: ${toKeep.join(", ")}. Different protein, different cuisine style, interesting flavours. Full format with NUTRITION, INGREDIENTS (5 portions), METHOD, FREEZING, EGG YOLK BOOST.`, INEZ_CONTEXT);
+      const match = result.match(/RECIPE \d+:\s*(.+)/i);
+      if (match) {
+        const rName = match[1].trim();
+        setParsedRecipes(p => p.map(r => r.number === recipeNumber ? { ...r, name: rName, content: result } : r));
+        setWeekPlan(p => {
+          const old = parsedRecipes.find(r => r.number === recipeNumber);
+          if (old) return p.replace(old.content, result);
+          return p;
+        });
+      }
+    } catch {}
+    setBatchLoading(false);
   }
 
   function saveRecipe() {
@@ -589,39 +573,10 @@ End with DAILY NUTRITION SUMMARY listing proteins, carbs, veg and any gaps.`);
   function saveSelectedRecipes() {
     const toSave = parsedRecipes.filter(r => selectedToSave[r.number]);
     const now = new Date().toLocaleDateString("en-GB");
-    const newRecs = toSave.map(r => ({
-      id: Date.now() + Math.random(),
-      name: r.name,
-      notes: r.content,
-      rating: 3,
-      favourite: false,
-      date: now
-    }));
+    const newRecs = toSave.map(r => ({ id: Date.now() + Math.random(), name: r.name, notes: r.content, rating: 3, favourite: false, date: now }));
     setRecipes(p => [...newRecs, ...p]);
     setShowSavePanel(false);
     alert(`✅ Saved ${toSave.length} recipe${toSave.length !== 1 ? 's' : ''} to your recipe book!`);
-  }
-
-  async function regenerateRecipe(recipeNumber) {
-    const toKeep = parsedRecipes.filter(r => r.number !== recipeNumber).map(r => r.name);
-    const keepNote = toKeep.length ? `Keep these exact recipes, only replace Recipe ${recipeNumber}: ${toKeep.join(", ")}` : "";
-    setBatchLoading(true); setBatchMsg(`Regenerating Recipe ${recipeNumber}...`);
-    try {
-      const result = await callClaude(`${keepNote}
-Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is different to: ${toKeep.join(", ")}. Different protein, different cuisine style, interesting flavours. Full format with NUTRITION, INGREDIENTS (5 portions), METHOD, FREEZING, EGG YOLK BOOST.`);
-      const match = result.match(/RECIPE \d+:\s*(.+)/i);
-      if (match) {
-        const newName = match[1].trim();
-        setParsedRecipes(p => p.map(r => r.number === recipeNumber ? { ...r, name: newName, content: result } : r));
-        // Update the weekPlan text too
-        setWeekPlan(p => {
-          const old = parsedRecipes.find(r => r.number === recipeNumber);
-          if (old) return p.replace(old.content, result);
-          return p;
-        });
-      }
-    } catch { }
-    setBatchLoading(false);
   }
 
   function addBatchToFridge() {
@@ -631,14 +586,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
     const now = new Date();
     recipeNames.forEach(name => {
       if (name) {
-        setFridgeItems(p => [{
-          id: Date.now() + Math.random(),
-          name,
-          portions: 5,
-          originalPortions: 5,
-          addedDate: now.toLocaleDateString("en-GB"),
-          addedTimestamp: now.getTime()
-        }, ...p]);
+        setFridgeItems(p => [{ id: Date.now() + Math.random(), name, portions: 5, originalPortions: 5, addedDate: now.toLocaleDateString("en-GB"), addedTimestamp: now.getTime() }, ...p]);
       }
     });
     setTab(0);
@@ -764,17 +712,10 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
         return (
           <div key={i} onClick={() => setCheckedItems(p => ({ ...p, [key]: !p[key] }))}
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", cursor: "pointer" }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: 5, flexShrink: 0,
-              border: `2px solid ${checked ? "#e76f51" : "#ddd"}`,
-              background: checked ? "#e76f51" : "white",
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
+            <div style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? "#e76f51" : "#ddd"}`, background: checked ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {checked && <span style={{ color: "white", fontSize: 13, fontWeight: "bold" }}>✓</span>}
             </div>
-            <span style={{ fontSize: 13, color: checked ? "#aaa" : "#2c3e50", textDecoration: checked ? "line-through" : "none", transition: "all 0.2s" }}>
-              {line.slice(2)}
-            </span>
+            <span style={{ fontSize: 13, color: checked ? "#aaa" : "#2c3e50", textDecoration: checked ? "line-through" : "none", transition: "all 0.2s" }}>{line.slice(2)}</span>
           </div>
         );
       }
@@ -793,14 +734,12 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#fef9f0,#fde8d0 50%,#fef0e8)", fontFamily: "Georgia,serif", paddingBottom: 50 }}>
 
-      {/* Header */}
       <div style={{ background: "linear-gradient(135deg,#e76f51,#f4a261)", padding: "26px 24px 18px", textAlign: "center", boxShadow: "0 4px 20px rgba(231,111,81,0.3)" }}>
         <div style={{ fontSize: 34, marginBottom: 4 }}>🍳</div>
         <h1 style={{ margin: 0, color: "white", fontSize: 23, fontWeight: "bold", letterSpacing: "-0.5px" }}>Inez's Kitchen</h1>
         <p style={{ margin: "5px 0 0", color: "rgba(255,255,255,0.85)", fontSize: 12 }}>Reflux-safe • Family meals • Made with love</p>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: "flex", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", overflowX: "auto" }}>
         {TABS.map((t, i) => (
           <button key={i} onClick={() => setTab(i)} style={{ flex: 1, padding: "12px 1px", border: "none", background: "none", fontSize: 10, fontWeight: tab === i ? "bold" : "normal", color: tab === i ? "#e76f51" : "#999", borderBottom: `3px solid ${tab === i ? "#e76f51" : "transparent"}`, cursor: "pointer", fontFamily: "Georgia,serif", whiteSpace: "nowrap" }}>{t}</button>
@@ -811,24 +750,14 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
 
         {/* ── FRIDGE TRACKER ── */}
         {tab === 0 && <>
-
-          {/* Status banner */}
           <div style={{ background: status.bg, border: `2px solid ${status.color}`, borderRadius: 14, padding: "16px 18px", marginBottom: 16 }}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{status.icon}</div>
             <div style={{ fontWeight: "bold", color: status.color, fontSize: 15, marginBottom: 4 }}>{status.msg}</div>
-            {fridgeItems.length > 0 && (
-              <div style={{ fontSize: 12, color: "#888" }}>
-                {totalPortions} portions across {fridgeItems.length} meal{fridgeItems.length !== 1 ? "s" : ""} — roughly {daysLeft} day{daysLeft !== 1 ? "s" : ""} at {MEALS_PER_DAY} meals/day
-              </div>
-            )}
+            {fridgeItems.length > 0 && <div style={{ fontSize: 12, color: "#888" }}>{totalPortions} portions across {fridgeItems.length} meal{fridgeItems.length !== 1 ? "s" : ""} — roughly {daysLeft} day{daysLeft !== 1 ? "s" : ""} at {MEALS_PER_DAY} meals/day</div>}
           </div>
 
-          {/* Quick action */}
-          {needsToCook && (
-            <Btn label="🍳 Go to Batch Cook" onClick={() => setTab(1)} style={{ width: "100%", marginBottom: 16 }} />
-          )}
+          {needsToCook && <Btn label="🍳 Go to Batch Cook" onClick={() => setTab(1)} style={{ width: "100%", marginBottom: 16 }} />}
 
-          {/* Add item */}
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
             <Btn label={addingFridge ? "✕ Cancel" : "＋ Add to Fridge"} onClick={() => setAddingFridge(!addingFridge)} style={{ flex: 1 }} />
             {fridgeItems.length > 0 && <Btn label="🗑️ Clear All" onClick={() => setFridgeItems([])} color="#e74c3c" small />}
@@ -842,7 +771,6 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
             }} />
           )}
 
-          {/* Fridge items */}
           {fridgeItems.length === 0 && !addingFridge ? (
             <Card>
               <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb" }}>
@@ -867,29 +795,17 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                     <button onClick={() => removeFridgeItem(item.id)} style={{ background: "#fff0f0", border: "none", borderRadius: 8, padding: "5px 8px", cursor: "pointer", fontSize: 11, color: "#e74c3c", marginLeft: 4 }}>✕</button>
                   </div>
                 </div>
-
-                {/* Age warning */}
                 {(() => {
                   const age = fridgeItemAge(item);
                   if (!age) return null;
-                  return (
-                    <div style={{ fontSize: 11, fontWeight: age.warn ? "bold" : "normal", color: age.color, marginBottom: 6, padding: age.warn ? "4px 8px" : 0, background: age.danger ? "#fff0f0" : age.warn ? "#fffbf0" : "transparent", borderRadius: 6 }}>
-                      🕐 {age.label}
-                    </div>
-                  );
+                  return <div style={{ fontSize: 11, fontWeight: age.warn ? "bold" : "normal", color: age.color, marginBottom: 6, padding: age.warn ? "4px 8px" : 0, background: age.danger ? "#fff0f0" : age.warn ? "#fffbf0" : "transparent", borderRadius: 6 }}>🕐 {age.label}</div>;
                 })()}
-
-                {/* Progress bar */}
                 <div style={{ background: "#f0f0f0", borderRadius: 6, height: 6, marginBottom: 10 }}>
                   <div style={{ width: `${Math.min(100, pct * 100)}%`, height: "100%", borderRadius: 6, background: barColor, transition: "width 0.3s" }} />
                 </div>
-
-                {/* Use buttons */}
                 <div style={{ display: "flex", gap: 6 }}>
                   {[1, 2, 3].map(n => (
-                    <button key={n} onClick={() => usePortions(item.id, n)} style={{ flex: 1, padding: "7px 4px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c05621", fontWeight: "bold" }}>
-                      Use {n}
-                    </button>
+                    <button key={n} onClick={() => usePortions(item.id, n)} style={{ flex: 1, padding: "7px 4px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c05621", fontWeight: "bold" }}>Use {n}</button>
                   ))}
                 </div>
               </div>
@@ -899,13 +815,11 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
 
         {/* ── BATCH COOK ── */}
         {tab === 1 && <>
-          {/* Fridge status reminder */}
           {fridgeItems.length > 0 && (
             <div style={{ background: status.bg, border: `1.5px solid ${status.color}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: status.color, fontWeight: "bold" }}>
               {status.icon} {status.msg}
             </div>
           )}
-
           <Card>
             <h2 style={{ margin: "0 0 6px", fontSize: 17, color: "#2c3e50" }}>Inez's Batch Cook</h2>
             <p style={{ margin: "0 0 14px", fontSize: 13, color: "#888", lineHeight: 1.6 }}>4 varied recipes + snacks. Won't repeat what's already in the fridge.</p>
@@ -936,31 +850,31 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                 <Btn label="📖 Save Recipes" onClick={() => setShowSavePanel(!showSavePanel)} color="#f4a261" style={{ flex: 1 }} />
               </div>
 
-              {showSavePanel && parsedRecipes.length === 0 ? (
-                <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261", fontSize: 13, color: "#888", textAlign: "center" }}>
-                  Regenerate your plan to use the new save feature — tap ✨ Generate again and your recipes will be selectable.
-                </div>
-              ) : (
-                <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261" }}>
-                  <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: "bold", color: "#2c3e50" }}>Select recipes to save — tick the ones you want, replace the ones you don't:</p>
-                  {parsedRecipes.map(r => (
-                    <div key={r.number} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f0e0d0" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }} onClick={() => setSelectedToSave(p => ({ ...p, [r.number]: !p[r.number] }))}>
-                        <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${selectedToSave[r.number] ? "#e76f51" : "#ddd"}`, background: selectedToSave[r.number] ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {selectedToSave[r.number] && <span style={{ color: "white", fontSize: 13, fontWeight: "bold" }}>✓</span>}
-                        </div>
-                        <span style={{ fontSize: 13, color: selectedToSave[r.number] ? "#2c3e50" : "#aaa", textDecoration: selectedToSave[r.number] ? "none" : "line-through" }}>Recipe {r.number}: {r.name}</span>
-                      </div>
-                      <button onClick={() => regenerateRecipe(r.number)} disabled={batchLoading} style={{ marginLeft: 8, padding: "4px 10px", background: "#f0f8ff", border: "1.5px solid #90cdf4", borderRadius: 8, fontSize: 11, color: "#2b6cb0", cursor: "pointer", fontWeight: "bold", flexShrink: 0 }}>
-                        🔄 Replace
-                      </button>
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                    <Btn label={`💾 Save ${Object.values(selectedToSave).filter(Boolean).length} Recipe${Object.values(selectedToSave).filter(Boolean).length !== 1 ? 's' : ''}`} onClick={saveSelectedRecipes} style={{ flex: 1 }} disabled={!Object.values(selectedToSave).some(Boolean)} />
-                    <Btn label="Cancel" onClick={() => setShowSavePanel(false)} color="#aaa" small />
+              {showSavePanel && (
+                parsedRecipes.length === 0 ? (
+                  <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261", fontSize: 13, color: "#888", textAlign: "center" }}>
+                    Regenerate your plan to use the new save feature — tap ✨ Generate again.
                   </div>
-                </div>
+                ) : (
+                  <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261" }}>
+                    <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: "bold", color: "#2c3e50" }}>Select recipes to save:</p>
+                    {parsedRecipes.map(r => (
+                      <div key={r.number} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f0e0d0" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }} onClick={() => setSelectedToSave(p => ({ ...p, [r.number]: !p[r.number] }))}>
+                          <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${selectedToSave[r.number] ? "#e76f51" : "#ddd"}`, background: selectedToSave[r.number] ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {selectedToSave[r.number] && <span style={{ color: "white", fontSize: 13, fontWeight: "bold" }}>✓</span>}
+                          </div>
+                          <span style={{ fontSize: 13, color: selectedToSave[r.number] ? "#2c3e50" : "#aaa", textDecoration: selectedToSave[r.number] ? "none" : "line-through" }}>Recipe {r.number}: {r.name}</span>
+                        </div>
+                        <button onClick={() => regenerateRecipe(r.number)} disabled={batchLoading} style={{ marginLeft: 8, padding: "4px 10px", background: "#f0f8ff", border: "1.5px solid #90cdf4", borderRadius: 8, fontSize: 11, color: "#2b6cb0", cursor: "pointer", fontWeight: "bold", flexShrink: 0 }}>🔄 Replace</button>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                      <Btn label={`💾 Save ${Object.values(selectedToSave).filter(Boolean).length} Recipe${Object.values(selectedToSave).filter(Boolean).length !== 1 ? 's' : ''}`} onClick={saveSelectedRecipes} style={{ flex: 1 }} disabled={!Object.values(selectedToSave).some(Boolean)} />
+                      <Btn label="Cancel" onClick={() => setShowSavePanel(false)} color="#aaa" small />
+                    </div>
+                  </div>
+                )
               )}
             </Card>
           )}
@@ -1007,12 +921,6 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ margin: 0, color: "#e76f51", fontSize: 16 }}>🗓️ This Weekend's Plan</h3>
                 <Btn label="🖨️ Print" onClick={printWeekend} small color="#555" />
-              </div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-                {[["👶 Inez", "#fff8f0", "#f4a261", "#c05621"], ["👦 Finlay", "#f0f8ff", "#90cdf4", "#2b6cb0"], ["🍽️ Adults", "#f5f5f5", "#ddd", "#555"]].map(([label, bg, border, color], i) => (
-                  <div key={i} style={{ padding: "4px 10px", borderRadius: 16, fontSize: 11, background: bg, border: `1.5px solid ${border}`, color }}>{label}</div>
-                ))}
-                <div style={{ padding: "4px 10px", borderRadius: 16, fontSize: 11, background: "#fff0f5", border: "1.5px solid #feb2b2", color: "#c53030" }}>🆘 Finlay Fallback</div>
               </div>
               <FormatWeekend text={weekendPlan} />
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -1085,10 +993,8 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
               </div>
               {expandedRecipe === r.id && (
                 <div style={{ marginTop: 12 }}>
-                  {r.notes
-                    ? <div style={{ padding: 12, background: "#fef9f0", borderRadius: 8, fontSize: 12, color: "#555", lineHeight: 1.7, whiteSpace: "pre-wrap", marginBottom: 10 }}>{r.notes}</div>
-                    : <div style={{ padding: 10, background: "#f8f8f8", borderRadius: 8, fontSize: 12, color: "#aaa", marginBottom: 10 }}>No notes saved for this recipe.</div>
-                  }
+                  {r.notes ? <div style={{ padding: 12, background: "#fef9f0", borderRadius: 8, fontSize: 12, color: "#555", lineHeight: 1.7, whiteSpace: "pre-wrap", marginBottom: 10 }}>{r.notes}</div>
+                    : <div style={{ padding: 10, background: "#f8f8f8", borderRadius: 8, fontSize: 12, color: "#aaa", marginBottom: 10 }}>No notes saved.</div>}
                   <p style={{ margin: "0 0 6px", fontSize: 11, color: "#aaa" }}>Update rating:</p>
                   <Stars rating={r.rating} onChange={(v) => updateRating(r.id, v)} />
                 </div>
@@ -1106,9 +1012,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                 <button onClick={() => {
                   setShoppingList(null); setWeekendShoppingList(null); setCheckedItems({});
                   try { localStorage.removeItem("inez_shopping"); localStorage.removeItem("inez_weekend_shopping"); localStorage.removeItem("inez_checked"); } catch {}
-                }} style={{ padding: "6px 12px", background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, fontSize: 11, color: "#c0392b", cursor: "pointer", fontWeight: "bold" }}>
-                  🗑️ Clear lists
-                </button>
+                }} style={{ padding: "6px 12px", background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, fontSize: 11, color: "#c0392b", cursor: "pointer", fontWeight: "bold" }}>🗑️ Clear lists</button>
               </div>
               {shoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>🍳 Inez's Batch Cook List</h3><ShoppingListDisplay text={shoppingList} prefix="batch" /></Card>}
               {weekendShoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>👨‍👩‍👧‍👦 Weekend Family List</h3><ShoppingListDisplay text={weekendShoppingList} prefix="weekend" /></Card>}
