@@ -940,7 +940,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                 <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261", fontSize: 13, color: "#888", textAlign: "center" }}>
                   Regenerate your plan to use the new save feature — tap ✨ Generate again and your recipes will be selectable.
                 </div>
-              ) : (
+              ) :
                 <div style={{ marginTop: 16, padding: 16, background: "#fef9f0", borderRadius: 12, border: "1.5px solid #f4a261" }}>
                   <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: "bold", color: "#2c3e50" }}>Select recipes to save — tick the ones you want, replace the ones you don't:</p>
                   {parsedRecipes.map(r => (
@@ -961,7 +961,7 @@ Generate ONE replacement recipe (call it RECIPE ${recipeNumber}: [name]) that is
                     <Btn label="Cancel" onClick={() => setShowSavePanel(false)} color="#aaa" small />
                   </div>
                 </div>
-              )}
+              ))}
             </Card>
           )}
 
