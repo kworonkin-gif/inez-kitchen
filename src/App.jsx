@@ -161,6 +161,7 @@ export default function MealPlanner() {
   const [shoppingList, setShoppingList] = useState(() => { try { return localStorage.getItem("inez_shopping") || null; } catch { return null; } });
   const [shoppingLoading, setShoppingLoading] = useState(false);
   const [shoppingError, setShoppingError] = useState("");
+  const [shoppingError, setShoppingError] = useState("");
 
   const [dayPlan, setDayPlan] = useState(null);
   const [dayLoading, setDayLoading] = useState(false);
