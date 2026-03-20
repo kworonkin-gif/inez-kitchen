@@ -263,7 +263,7 @@ export default function MealPlanner() {
       const match = line.match(/^RECIPE (\d+):\s*(.+)/i);
       if (match) {
         if (current) parsed.push(current);
-        current = { number: match[1], name: match[2].replace(/\s*-\s*.+$/, '').trim(), content: line + '\n', kept: true };
+        current = { number: match[1], name: match[2].replace(/\s*-\s*.+$/, '').trim(), content: line + '\n', kept: true, expanded: false };
       } else if (current) {
         if (line.match(/^SNACKS THIS WEEK/i) || line.match(/^🍎/)) { parsed.push(current); current = null; break; }
         current.content += line + '\n';
@@ -529,7 +529,7 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
   function FormatRecipeText({ text }) {
     if (!text) return null;
     return text.split('\n').map((line, i) => {
-      if (line.match(/^RECIPE \d+:/i)) return <div key={i} style={{ fontWeight: "bold", color: "#e76f51", fontSize: 14, marginBottom: 2 }}>{line}</div>;
+      if (line.match(/^RECIPE \d+:/i)) return null;
       if (line.match(/^(NUTRITION:|INGREDIENTS|METHOD:|FREEZING:|EGG YOLK)/i)) return <div key={i} style={{ fontWeight: "bold", color: "#555", fontSize: 12, marginTop: 6 }}>{line}</div>;
       if (line.trim() === '---') return <hr key={i} style={{ border: "none", borderTop: "1px solid #f0e0d0", margin: "4px 0" }} />;
       if (line.startsWith('- ') || line.startsWith('• ')) return <div key={i} style={{ paddingLeft: 10, fontSize: 12, color: "#444", lineHeight: 1.6 }}>• {line.slice(2)}</div>;
@@ -696,7 +696,7 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                     <div style={{ fontSize: 15, color: "#2c3e50", fontWeight: "bold" }}>{recipe.name}</div>
                   </div>
                 </div>
-                <div style={{ maxHeight: 180, overflow: "hidden", position: "relative", marginBottom: 10 }}>
+                <div style={{ maxHeight: recipe.expanded ? "none" : 160, overflow: "hidden", position: "relative", marginBottom: 10 }}>
                   <FormatRecipeText text={recipe.content} />
                   <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)" }} />
                 </div>
