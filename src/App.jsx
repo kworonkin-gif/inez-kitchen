@@ -160,6 +160,7 @@ export default function MealPlanner() {
   const [useLeftovers, setUseLeftovers] = useState(false);
   const [shoppingList, setShoppingList] = useState(() => { try { return localStorage.getItem("inez_shopping") || null; } catch { return null; } });
   const [shoppingLoading, setShoppingLoading] = useState(false);
+  const [shoppingError, setShoppingError] = useState("");
 
   const [dayPlan, setDayPlan] = useState(null);
   const [dayLoading, setDayLoading] = useState(false);
@@ -283,7 +284,15 @@ export default function MealPlanner() {
   }
 
   async function generateBatchPlan() {
-    setBatchLoading(true); setBatchMsg("Generating your personalised recipes..."); setBatchRecipes([]); setBatchSnacks(""); setShoppingList(null);
+    setBatchLoading(true);
+    setBatchMsg("Generating your personalised recipes...");
+    setBatchRecipes([]);
+    setBatchSnacks("");
+    // Reset shopping list when a new batch is generated
+    setShoppingList(null);
+    setShoppingError("");
+    try { localStorage.removeItem("inez_shopping"); } catch {}
+
     const prev = recipes.length > 0 ? `Previously made (avoid repeating): ${recipes.map(r => r.name).join(", ")}.` : "";
     const dislikes = recipes.filter(r => r.rating <= 2).map(r => r.name);
     const dislikeNote = dislikes.length ? `She did NOT enjoy these - do not use: ${dislikes.join(", ")}.` : "";
@@ -304,7 +313,7 @@ Generate exactly 4 batch cook recipes for Inez. Each recipe must:
 - Include a calcium alternative (oat milk, tofu, broccoli, kale, tinned salmon)
 - Be moist and spoonable throughout
 - Be interesting and flavourful - not bland or boring
-- NEVER include chicken, apple, cacao, dairy, beef, garlic, onion, acidic foods, nuts
+- NEVER include chicken, apple, cacao, dairy, garlic, onion, acidic foods, nuts
 
 Format each recipe EXACTLY as:
 
@@ -387,14 +396,24 @@ RECIPE 4: [Name] - [Cuisine tradition]
   }
 
   async function generateSmartShoppingList() {
-    if (batchRecipes.length === 0) return;
+    if (batchRecipes.length === 0) {
+      setShoppingError("Please generate a batch cook plan first.");
+      return;
+    }
     setShoppingLoading(true);
+    setShoppingError("");
     const fridgeStock = fridgeItems.length > 0 ? `\n\nALREADY IN FRIDGE - do NOT include on shopping list unless significantly more is needed:\n${fridgeItems.map(f => f.name).join(", ")}` : "";
     const allText = batchRecipes.map(r => r.content).join("\n\n") + "\n\n" + batchSnacks;
     try {
       const result = await callGroq(`Create a consolidated shopping list from these recipes. Group by: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, FRUIT:, PANTRY & HERBS:. Combine duplicates. Each item on its own line starting with "- ".${fridgeStock}\n\nRECIPES:\n${allText}`);
-      setShoppingList(result);
-    } catch (e) { setShoppingList("Something went wrong generating the shopping list."); }
+      if (!result || result.trim().length < 10) {
+        setShoppingError("Shopping list came back empty. Please try again.");
+      } else {
+        setShoppingList(result);
+      }
+    } catch (e) {
+      setShoppingError("Something went wrong: " + e.message + ". Please try again.");
+    }
     setShoppingLoading(false);
   }
 
@@ -696,12 +715,19 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                     <div style={{ fontSize: 15, color: "#2c3e50", fontWeight: "bold" }}>{recipe.name}</div>
                   </div>
                 </div>
-                <div style={{ maxHeight: recipe.expanded ? "none" : 160, overflow: "hidden", position: "relative", marginBottom: 10 }}>
-                  <FormatRecipeText text={recipe.content} />
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)" }} />
+
+                {/* FIX: Only show gradient overlay when collapsed, not when expanded */}
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <div style={{ maxHeight: recipe.expanded ? "none" : 160, overflow: "hidden" }}>
+                    <FormatRecipeText text={recipe.content} />
+                  </div>
+                  {!recipe.expanded && (
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)", pointerEvents: "none" }} />
+                  )}
                 </div>
+
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, expanded: !r.expanded } : r))} style={{ padding: "7px 12px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, color: "#c05621", cursor: "pointer", fontWeight: "bold" }}>{recipe.expanded ? "Less" : "Full Recipe"}</button>
+                  <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, expanded: !r.expanded } : r))} style={{ padding: "7px 12px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, color: "#c05621", cursor: "pointer", fontWeight: "bold" }}>{recipe.expanded ? "▲ Less" : "▼ Full Recipe"}</button>
                   <button onClick={() => saveRecipeFromBatch(recipe)} style={{ padding: "7px 12px", background: "#f0faf4", border: "1.5px solid #52b788", borderRadius: 8, fontSize: 12, color: "#2d6a4f", cursor: "pointer", fontWeight: "bold" }}>📖 Save to Recipes</button>
                   <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, kept: !r.kept } : r))} style={{ padding: "7px 12px", background: recipe.kept ? "#fff0f0" : "#f0f8ff", border: `1.5px solid ${recipe.kept ? "#feb2b2" : "#90cdf4"}`, borderRadius: 8, fontSize: 12, color: recipe.kept ? "#c0392b" : "#2b6cb0", cursor: "pointer", fontWeight: "bold" }}>
                     {recipe.kept ? "✕ Replace this" : "✓ Keep this"}
@@ -715,7 +741,8 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
             <Card>
               <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#2c3e50" }}>🛒 Smart Shopping List</h3>
               <p style={{ margin: "0 0 12px", fontSize: 12, color: "#888" }}>{fridgeItems.length > 0 ? `Automatically excludes ${fridgeItems.length} item${fridgeItems.length !== 1 ? "s" : ""} already in your fridge.` : "Tap to generate your shopping list."}</p>
-              <Btn label={shoppingLoading ? "⏳ Building list..." : "🛒 Generate Shopping List"} onClick={generateSmartShoppingList} disabled={shoppingLoading} color="#2d6a4f" style={{ width: "100%" }} />
+              {shoppingError && <div style={{ background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#c0392b" }}>{shoppingError}</div>}
+              <Btn label={shoppingLoading ? "⏳ Building list..." : shoppingList ? "🔄 Regenerate Shopping List" : "🛒 Generate Shopping List"} onClick={generateSmartShoppingList} disabled={shoppingLoading} color="#2d6a4f" style={{ width: "100%" }} />
             </Card>
           </>}
 
