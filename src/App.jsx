@@ -701,6 +701,7 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                   <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)" }} />
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, expanded: !r.expanded } : r))} style={{ padding: "7px 12px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, color: "#c05621", cursor: "pointer", fontWeight: "bold" }}>{recipe.expanded ? "Less" : "Full Recipe"}</button>
                   <button onClick={() => saveRecipeFromBatch(recipe)} style={{ padding: "7px 12px", background: "#f0faf4", border: "1.5px solid #52b788", borderRadius: 8, fontSize: 12, color: "#2d6a4f", cursor: "pointer", fontWeight: "bold" }}>📖 Save to Recipes</button>
                   <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, kept: !r.kept } : r))} style={{ padding: "7px 12px", background: recipe.kept ? "#fff0f0" : "#f0f8ff", border: `1.5px solid ${recipe.kept ? "#feb2b2" : "#90cdf4"}`, borderRadius: 8, fontSize: 12, color: recipe.kept ? "#c0392b" : "#2b6cb0", cursor: "pointer", fontWeight: "bold" }}>
                     {recipe.kept ? "✕ Replace this" : "✓ Keep this"}
