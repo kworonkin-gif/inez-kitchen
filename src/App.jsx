@@ -400,10 +400,10 @@ RECIPE 4: [Name] - [Cuisine tradition]
     setShoppingLoading(true);
     const fridgeStock = fridgeItems.length > 0 ? `Already in fridge - exclude unless more needed: ${fridgeItems.map(f => f.name).join(", ")}` : "";
     try {
-      const result = await callGroq(`Extract the shopping list from this recipe. Return ONLY a JSON array, no other text, no markdown. Each item: {"ingredient": "name", "quantity": "amount and unit", "category": "one of: Proteins, Vegetables, Grains & Carbs, Fruit, Pantry & Herbs"}. ${fridgeStock}\n\nRECIPE:\n${recipe.content}`);
+      const result = await callGroq(`Extract the shopping list from this recipe. Return ONLY a JSON array, no other text, no markdown. Each item: {"ingredient": "name", "quantity": "amount and unit - ALWAYS include a quantity, e.g. to taste, 1 pinch, as needed", "category": "one of: Proteins, Vegetables, Grains & Carbs, Fruit, Pantry & Herbs"}. ${fridgeStock}\n\nRECIPE:\n${recipe.content}`);
       const clean = result.replace(/\`\`\`json|\`\`\`/g, '').trim();
       const items = JSON.parse(clean);
-      const entry = { recipeNumber: recipe.number, recipeName: recipe.name, items: items.map(i => ({ ...i, checked: true })) };
+      const entry = { recipeNumber: recipe.number, recipeName: recipe.name, items: items.map(i => ({ ...i, checked: false })) };
       setRecipeShoppingItems(prev => {
         const filtered = prev.filter(r => r.recipeNumber !== recipe.number);
         return [...filtered, entry];
@@ -883,8 +883,8 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                     <h3 style={{ margin: 0, fontSize: 14, color: "#2c3e50" }}>{r.recipeName}</h3>
                     <button onClick={() => removeRecipe(r.recipeNumber)} style={{ background: "#fff0f0", border: "none", borderRadius: 8, padding: "4px 8px", fontSize: 11, color: "#e74c3c", cursor: "pointer" }}>Remove</button>
                   </div>
-                  {r.items.map((item, i) => (
-                    <div key={i} onClick={() => toggleItem(r.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < r.items.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                  {[...r.items].sort((a, b) => a.checked - b.checked).map((item, i, arr) => (
+                    <div key={i} onClick={() => toggleItem(r.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none", opacity: item.checked ? 0.5 : 1 }}>
                       <div style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `2px solid ${item.checked ? "#e76f51" : "#ddd"}`, background: item.checked ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {item.checked && <span style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</span>}
                       </div>
@@ -903,8 +903,8 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                   return (
                     <Card key={cat}>
                       <h3 style={{ margin: "0 0 12px", fontSize: 14, color: "#e76f51" }}>{cat}</h3>
-                      {catItems.map((item, i) => (
-                        <div key={i} onClick={() => toggleItem(item.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < catItems.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                      {[...catItems].sort((a, b) => a.checked - b.checked).map((item, i, arr) => (
+                        <div key={i} onClick={() => toggleItem(item.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none", opacity: item.checked ? 0.5 : 1 }}>
                           <div style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `2px solid ${item.checked ? "#e76f51" : "#ddd"}`, background: item.checked ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             {item.checked && <span style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</span>}
                           </div>
