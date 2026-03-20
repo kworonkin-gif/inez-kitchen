@@ -158,9 +158,10 @@ export default function MealPlanner() {
   const [batchSnacks, setBatchSnacks] = useState("");
   const [leftovers, setLeftovers] = useState("");
   const [useLeftovers, setUseLeftovers] = useState(false);
-  const [shoppingList, setShoppingList] = useState(() => { try { return localStorage.getItem("inez_shopping") || null; } catch { return null; } });
+  const [recipeShoppingItems, setRecipeShoppingItems] = useState(() => { try { return JSON.parse(localStorage.getItem("inez_recipe_shopping") || "[]"); } catch { return []; } });
+  const [shoppingView, setShoppingView] = useState("recipe");
   const [shoppingLoading, setShoppingLoading] = useState(false);
-  const [shoppingError, setShoppingError] = useState("");
+  const [shoppingLoadingId, setShoppingLoadingId] = useState(null);
 
   const [dayPlan, setDayPlan] = useState(null);
   const [dayLoading, setDayLoading] = useState(false);
@@ -188,7 +189,7 @@ export default function MealPlanner() {
 
   useEffect(() => { try { localStorage.setItem("inez_v4", JSON.stringify(recipes)); } catch {} }, [recipes]);
   useEffect(() => { try { localStorage.setItem("inez_fridge", JSON.stringify(fridgeItems)); } catch {} }, [fridgeItems]);
-  useEffect(() => { try { if (shoppingList) localStorage.setItem("inez_shopping", shoppingList); } catch {} }, [shoppingList]);
+  useEffect(() => { try { localStorage.setItem("inez_recipe_shopping", JSON.stringify(recipeShoppingItems)); } catch {} }, [recipeShoppingItems]);
   useEffect(() => { try { if (weekendShoppingList) localStorage.setItem("inez_weekend_shopping", weekendShoppingList); } catch {} }, [weekendShoppingList]);
   useEffect(() => { try { localStorage.setItem("inez_checked", JSON.stringify(checkedItems)); } catch {} }, [checkedItems]);
 
@@ -289,9 +290,8 @@ export default function MealPlanner() {
     setBatchRecipes([]);
     setBatchSnacks("");
     // Reset shopping list when a new batch is generated
-    setShoppingList(null);
-    setShoppingError("");
-    try { localStorage.removeItem("inez_shopping"); } catch {}
+    setRecipeShoppingItems([]);
+    try { localStorage.removeItem("inez_recipe_shopping"); } catch {}
 
     const prev = recipes.length > 0 ? `Previously made (avoid repeating): ${recipes.map(r => r.name).join(", ")}.` : "";
     const dislikes = recipes.filter(r => r.rating <= 2).map(r => r.name);
@@ -395,26 +395,24 @@ RECIPE 4: [Name] - [Cuisine tradition]
     alert(`"${recipe.name}" saved to your Recipe Book!`);
   }
 
-  async function generateSmartShoppingList() {
-    if (batchRecipes.length === 0) {
-      setShoppingError("Please generate a batch cook plan first.");
-      return;
-    }
+  async function addRecipeToShoppingList(recipe) {
+    setShoppingLoadingId(recipe.number);
     setShoppingLoading(true);
-    setShoppingError("");
-    const fridgeStock = fridgeItems.length > 0 ? `\n\nALREADY IN FRIDGE - do NOT include on shopping list unless significantly more is needed:\n${fridgeItems.map(f => f.name).join(", ")}` : "";
-    const allText = batchRecipes.map(r => r.content).join("\n\n") + "\n\n" + batchSnacks;
+    const fridgeStock = fridgeItems.length > 0 ? `Already in fridge - exclude unless more needed: ${fridgeItems.map(f => f.name).join(", ")}` : "";
     try {
-      const result = await callGroq(`Create a consolidated shopping list from these recipes. Group by: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, FRUIT:, PANTRY & HERBS:. Combine duplicates. Each item on its own line starting with "- ".${fridgeStock}\n\nRECIPES:\n${allText}`);
-      if (!result || result.trim().length < 10) {
-        setShoppingError("Shopping list came back empty. Please try again.");
-      } else {
-        setShoppingList(result);
-      }
+      const result = await callGroq(`Extract the shopping list from this recipe. Return ONLY a JSON array, no other text, no markdown. Each item: {"ingredient": "name", "quantity": "amount and unit", "category": "one of: Proteins, Vegetables, Grains & Carbs, Fruit, Pantry & Herbs"}. ${fridgeStock}\n\nRECIPE:\n${recipe.content}`);
+      const clean = result.replace(/\`\`\`json|\`\`\`/g, '').trim();
+      const items = JSON.parse(clean);
+      const entry = { recipeNumber: recipe.number, recipeName: recipe.name, items: items.map(i => ({ ...i, checked: true })) };
+      setRecipeShoppingItems(prev => {
+        const filtered = prev.filter(r => r.recipeNumber !== recipe.number);
+        return [...filtered, entry];
+      });
     } catch (e) {
-      setShoppingError("Something went wrong: " + e.message + ". Please try again.");
+      alert("Could not generate shopping list for this recipe. Please try again.");
     }
     setShoppingLoading(false);
+    setShoppingLoadingId(null);
   }
 
   function addBatchToFridge() {
@@ -732,21 +730,16 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
                   <button onClick={() => setBatchRecipes(p => p.map(r => r.number === recipe.number ? { ...r, kept: !r.kept } : r))} style={{ padding: "7px 12px", background: recipe.kept ? "#fff0f0" : "#f0f8ff", border: `1.5px solid ${recipe.kept ? "#feb2b2" : "#90cdf4"}`, borderRadius: 8, fontSize: 12, color: recipe.kept ? "#c0392b" : "#2b6cb0", cursor: "pointer", fontWeight: "bold" }}>
                     {recipe.kept ? "✕ Replace this" : "✓ Keep this"}
                   </button>
+                  <button onClick={() => addRecipeToShoppingList(recipe)} disabled={shoppingLoading && shoppingLoadingId === recipe.number} style={{ padding: "7px 12px", background: recipeShoppingItems.find(r => r.recipeNumber === recipe.number) ? "#f0faf4" : "#fef9f0", border: `1.5px solid ${recipeShoppingItems.find(r => r.recipeNumber === recipe.number) ? "#52b788" : "#f4a261"}`, borderRadius: 8, fontSize: 12, color: recipeShoppingItems.find(r => r.recipeNumber === recipe.number) ? "#2d6a4f" : "#c05621", cursor: "pointer", fontWeight: "bold" }}>
+                    {shoppingLoading && shoppingLoadingId === recipe.number ? "⏳" : recipeShoppingItems.find(r => r.recipeNumber === recipe.number) ? "✅ In Shopping List" : "🛒 Add to Shopping List"}
+                  </button>
                 </div>
               </div>
             ))}
 
             {batchSnacks && <Card style={{ background: "#f0faf4", border: "1px solid #b7e4c7" }}><FormatText text={batchSnacks} /></Card>}
 
-            <Card>
-              <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#2c3e50" }}>🛒 Smart Shopping List</h3>
-              <p style={{ margin: "0 0 12px", fontSize: 12, color: "#888" }}>{fridgeItems.length > 0 ? `Automatically excludes ${fridgeItems.length} item${fridgeItems.length !== 1 ? "s" : ""} already in your fridge.` : "Tap to generate your shopping list."}</p>
-              {shoppingError && <div style={{ background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#c0392b" }}>{shoppingError}</div>}
-              <Btn label={shoppingLoading ? "⏳ Building list..." : shoppingList ? "🔄 Regenerate Shopping List" : "🛒 Generate Shopping List"} onClick={generateSmartShoppingList} disabled={shoppingLoading} color="#2d6a4f" style={{ width: "100%" }} />
-            </Card>
           </>}
-
-          {shoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>🛒 Inez's Shopping List</h3><ShoppingListDisplay text={shoppingList} prefix="batch" /></Card>}
         </>}
 
         {/* DAY PLANNER */}
@@ -850,27 +843,83 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
         </>}
 
         {/* SHOPPING */}
-        {tab === 5 && (
-          (shoppingList || weekendShoppingList) ? (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>Tap items as you shop. Lists saved until cleared.</p>
-                <button onClick={() => { setShoppingList(null); setWeekendShoppingList(null); setCheckedItems({}); try { localStorage.removeItem("inez_shopping"); localStorage.removeItem("inez_weekend_shopping"); localStorage.removeItem("inez_checked"); } catch {} }} style={{ padding: "6px 12px", background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, fontSize: 11, color: "#c0392b", cursor: "pointer", fontWeight: "bold" }}>Clear lists</button>
-              </div>
-              {shoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>🍳 Inez's Batch Cook List</h3><ShoppingListDisplay text={shoppingList} prefix="batch" /></Card>}
-              {weekendShoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>👨‍👩‍👧‍👦 Weekend Family List</h3><ShoppingListDisplay text={weekendShoppingList} prefix="weekend" /></Card>}
-            </div>
-          ) : (
+        {tab === 5 && (() => {
+          const allItems = recipeShoppingItems.flatMap(r => r.items.map(i => ({ ...i, recipeNumber: r.recipeNumber, recipeName: r.recipeName })));
+          const hasItems = recipeShoppingItems.length > 0;
+
+          function toggleItem(recipeNumber, ingredient) {
+            setRecipeShoppingItems(prev => prev.map(r => r.recipeNumber !== recipeNumber ? r : {
+              ...r, items: r.items.map(i => i.ingredient === ingredient ? { ...i, checked: !i.checked } : i)
+            }));
+          }
+
+          function removeRecipe(recipeNumber) {
+            setRecipeShoppingItems(prev => prev.filter(r => r.recipeNumber !== recipeNumber));
+          }
+
+          if (!hasItems) return (
             <Card><div style={{ textAlign: "center", padding: "40px 0" }}>
               <div style={{ fontSize: 44, marginBottom: 12 }}>🛒</div>
-              <p style={{ margin: "0 0 18px", fontSize: 13, lineHeight: 1.6, color: "#aaa" }}>Generate a batch cook or weekend plan and your shopping lists will appear here.</p>
-              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-                <Btn label="Batch Cook" onClick={() => setTab(1)} small />
-                <Btn label="Weekend" onClick={() => setTab(3)} small color="#2d6a4f" />
-              </div>
+              <p style={{ margin: "0 0 18px", fontSize: 13, lineHeight: 1.6, color: "#aaa" }}>Go to Batch Cook, generate recipes, then tap "Add to Shopping List" on each recipe.</p>
+              <Btn label="Go to Batch Cook" onClick={() => setTab(1)} small />
             </div></Card>
-          )
-        )}
+          );
+
+          return (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "#aaa" }}>Tap items to cross off as you shop.</p>
+                <button onClick={() => { setRecipeShoppingItems([]); setCheckedItems({}); try { localStorage.removeItem("inez_recipe_shopping"); } catch {} }} style={{ padding: "6px 12px", background: "#fff0f0", border: "1.5px solid #feb2b2", borderRadius: 8, fontSize: 11, color: "#c0392b", cursor: "pointer", fontWeight: "bold" }}>Clear all</button>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <button onClick={() => setShoppingView("recipe")} style={{ flex: 1, padding: "10px", borderRadius: 10, border: `2px solid ${shoppingView === "recipe" ? "#e76f51" : "#eee"}`, background: shoppingView === "recipe" ? "#fff3f0" : "white", fontSize: 13, fontWeight: "bold", cursor: "pointer", color: shoppingView === "recipe" ? "#e76f51" : "#aaa" }}>By Recipe</button>
+                <button onClick={() => setShoppingView("ingredient")} style={{ flex: 1, padding: "10px", borderRadius: 10, border: `2px solid ${shoppingView === "ingredient" ? "#e76f51" : "#eee"}`, background: shoppingView === "ingredient" ? "#fff3f0" : "white", fontSize: 13, fontWeight: "bold", cursor: "pointer", color: shoppingView === "ingredient" ? "#e76f51" : "#aaa" }}>By Ingredient</button>
+              </div>
+
+              {shoppingView === "recipe" && recipeShoppingItems.map(r => (
+                <Card key={r.recipeNumber}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <h3 style={{ margin: 0, fontSize: 14, color: "#2c3e50" }}>{r.recipeName}</h3>
+                    <button onClick={() => removeRecipe(r.recipeNumber)} style={{ background: "#fff0f0", border: "none", borderRadius: 8, padding: "4px 8px", fontSize: 11, color: "#e74c3c", cursor: "pointer" }}>Remove</button>
+                  </div>
+                  {r.items.map((item, i) => (
+                    <div key={i} onClick={() => toggleItem(r.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < r.items.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `2px solid ${item.checked ? "#e76f51" : "#ddd"}`, background: item.checked ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {item.checked && <span style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</span>}
+                      </div>
+                      <span style={{ flex: 1, fontSize: 13, color: item.checked ? "#aaa" : "#2c3e50", textDecoration: item.checked ? "line-through" : "none" }}>{item.ingredient}</span>
+                      <span style={{ fontSize: 12, color: "#aaa", flexShrink: 0 }}>{item.quantity}</span>
+                    </div>
+                  ))}
+                </Card>
+              ))}
+
+              {shoppingView === "ingredient" && (() => {
+                const categories = ["Proteins", "Vegetables", "Grains & Carbs", "Fruit", "Pantry & Herbs"];
+                return categories.map(cat => {
+                  const catItems = allItems.filter(i => i.category === cat);
+                  if (catItems.length === 0) return null;
+                  return (
+                    <Card key={cat}>
+                      <h3 style={{ margin: "0 0 12px", fontSize: 14, color: "#e76f51" }}>{cat}</h3>
+                      {catItems.map((item, i) => (
+                        <div key={i} onClick={() => toggleItem(item.recipeNumber, item.ingredient)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer", borderBottom: i < catItems.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, border: `2px solid ${item.checked ? "#e76f51" : "#ddd"}`, background: item.checked ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {item.checked && <span style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</span>}
+                          </div>
+                          <span style={{ flex: 1, fontSize: 13, color: item.checked ? "#aaa" : "#2c3e50", textDecoration: item.checked ? "line-through" : "none" }}>{item.ingredient}</span>
+                          <span style={{ fontSize: 12, color: "#888", flexShrink: 0 }}>{item.quantity}</span>
+                          <span style={{ fontSize: 10, color: "#ccc", flexShrink: 0 }}>{item.recipeName}</span>
+                        </div>
+                      ))}
+                    </Card>
+                  );
+                });
+              })()}
+            </div>
+          );
+        })()}
 
       </div>
     </div>
