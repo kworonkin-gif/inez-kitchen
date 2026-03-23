@@ -163,16 +163,16 @@ export default function MealPlanner() {
   const [shoppingLoading, setShoppingLoading] = useState(false);
   const [shoppingLoadingId, setShoppingLoadingId] = useState(null);
 
-  const [dayPlan, setDayPlan] = useState(null);
-  const [dayLoading, setDayLoading] = useState(false);
-  const [dayNote, setDayNote] = useState("");
   const [includeEggs, setIncludeEggs] = useState(true);
 
-  const [weekendPlan, setWeekendPlan] = useState(null);
+  const [weekendMeals, setWeekendMeals] = useState([]);
   const [weekendLoading, setWeekendLoading] = useState(false);
   const [weekendNote, setWeekendNote] = useState("");
-  const [weekendShoppingList, setWeekendShoppingList] = useState(() => { try { return localStorage.getItem("inez_weekend_shopping") || null; } catch { return null; } });
-  const [weekendShoppingLoading, setWeekendShoppingLoading] = useState(false);
+  const [weekendRegenLoading, setWeekendRegenLoading] = useState(false);
+  const [dayMeals, setDayMeals] = useState([]);
+  const [dayNote, setDayNote] = useState("");
+  const [dayLoading, setDayLoading] = useState(false);
+  const [dayRegenLoading, setDayRegenLoading] = useState(false);
 
   const [checkedItems, setCheckedItems] = useState(() => { try { return JSON.parse(localStorage.getItem("inez_checked") || "{}"); } catch { return {}; } });
   const [expandedRecipe, setExpandedRecipe] = useState(null);
@@ -190,7 +190,6 @@ export default function MealPlanner() {
   useEffect(() => { try { localStorage.setItem("inez_v4", JSON.stringify(recipes)); } catch {} }, [recipes]);
   useEffect(() => { try { localStorage.setItem("inez_fridge", JSON.stringify(fridgeItems)); } catch {} }, [fridgeItems]);
   useEffect(() => { try { localStorage.setItem("inez_recipe_shopping", JSON.stringify(recipeShoppingItems)); } catch {} }, [recipeShoppingItems]);
-  useEffect(() => { try { if (weekendShoppingList) localStorage.setItem("inez_weekend_shopping", weekendShoppingList); } catch {} }, [weekendShoppingList]);
   useEffect(() => { try { localStorage.setItem("inez_checked", JSON.stringify(checkedItems)); } catch {} }, [checkedItems]);
 
   const totalPortions = fridgeItems.reduce((sum, item) => sum + item.portions, 0);
@@ -423,73 +422,112 @@ RECIPE 4: [Name] - [Cuisine tradition]
   }
 
   async function generateWeekendPlan() {
-    setWeekendLoading(true); setWeekendPlan(null); setWeekendShoppingList(null);
+    setWeekendLoading(true); setWeekendMeals([]);
+    const slots = ["SATURDAY LUNCH", "SATURDAY DINNER", "SUNDAY LUNCH", "SUNDAY DINNER"];
     try {
-      const result = await callGroq(`Plan Saturday AND Sunday shared family meals. For each day: Lunch and Dinner.
-${weekendNote ? `Note from mum: ${weekendNote}` : ""}
-
-CRITICAL: Each meal works for all 4 family members with adaptations. Inez's version looks similar to everyone else's. Vary proteins Saturday vs Sunday. Inez eats lunch at 11:30 and dinner at 3:30-4:30.
-
-Format EXACTLY as:
-
-SATURDAY
----
-SATURDAY LUNCH: [meal name]
+      const results = await Promise.all(slots.map(slot => callGroq(
+        `Plan ONE family meal for ${slot}. ${weekendNote ? `Note: ${weekendNote}` : ""}
+Works for: Mum (no restrictions), Phil (no restrictions), Finlay (8, fussy - likes pasta/fish/chips, hates veg chunks, sauce must be integrated), Inez (20mo, GERD + Sotos, no chicken/dairy/garlic/onion/acidic food, needs soft moist spoonable high-calorie food).
+Format EXACTLY:
+MEAL: [name]
 Why this works for everyone: [1 line]
-HOW TO COOK IT: [Main method]
-INEZ FIRST - set aside her portion when: [Exact moment]
+HOW TO COOK IT: [full method with temps and times]
+INEZ FIRST - set aside her portion when: [exact moment before adult flavourings]
+INEZ METHOD: [complete steps for her version - soft, moist, high calorie]
 PLATING:
-Inez: [her version - soft, moist, spoonable, high calorie]
-Finlay: [his version - components separated]
+Inez: [her version]
+Finlay: [his version - components separated, sauce integrated]
 Adults: [full version]
-FINLAY FALLBACK: [Simple pantry alternative]
-
-SATURDAY DINNER: [meal name]
-[same format]
-
-SUNDAY
----
-SUNDAY LUNCH: [meal name]
-[same format]
-
-SUNDAY DINNER: [meal name]
-[same format]`, FAMILY_CONTEXT);
-      setWeekendPlan(result);
-    } catch (e) { setWeekendPlan("Something went wrong. Please try again."); }
+FINLAY FALLBACK: [simple pantry alternative]
+SHOPPING: [comma separated ingredient list with quantities]`, FAMILY_CONTEXT
+      )));
+      const meals = slots.map((slot, i) => {
+        const nameMatch = results[i].match(/^MEAL:\s*(.+)/im);
+        return { id: slot, label: slot.replace("SATURDAY ", "Sat ").replace("SUNDAY ", "Sun "), name: nameMatch ? nameMatch[1].trim() : slot, content: results[i], kept: true, expanded: false };
+      });
+      setWeekendMeals(meals);
+    } catch (e) { alert("Something went wrong generating the weekend plan. Please try again."); }
     setWeekendLoading(false);
   }
 
-  async function generateWeekendShopping() {
-    if (!weekendPlan) return;
-    setWeekendShoppingLoading(true);
-    const fridgeStock = fridgeItems.length > 0 ? `\nAlready in fridge - exclude unless more needed: ${fridgeItems.map(f => f.name).join(", ")}` : "";
+  async function regenerateWeekendMeal(meal) {
+    setWeekendRegenLoading(true);
+    const keep = weekendMeals.filter(m => m.kept && m.id !== meal.id).map(m => m.name).join(", ");
     try {
-      const result = await callGroq(`Consolidated weekend shopping list. Group by: PROTEINS:, VEGETABLES:, GRAINS & CARBS:, PANTRY & HERBS:. Each item starts with "- ". ${fridgeStock}\n\nMEALS:\n${weekendPlan}`, FAMILY_CONTEXT);
-      setWeekendShoppingList(result);
-    } catch { setWeekendShoppingList("Something went wrong."); }
-    setWeekendShoppingLoading(false);
+      const result = await callGroq(
+        `Plan ONE family meal for ${meal.id}. Must be DIFFERENT from: ${keep}. ${weekendNote ? `Note: ${weekendNote}` : ""}
+Works for: Mum (no restrictions), Phil (no restrictions), Finlay (8, fussy - likes pasta/fish/chips, hates veg chunks, sauce must be integrated), Inez (20mo, GERD + Sotos, no chicken/dairy/garlic/onion/acidic food, needs soft moist spoonable high-calorie food).
+Format EXACTLY:
+MEAL: [name]
+Why this works for everyone: [1 line]
+HOW TO COOK IT: [full method with temps and times]
+INEZ FIRST - set aside her portion when: [exact moment before adult flavourings]
+INEZ METHOD: [complete steps for her version - soft, moist, high calorie]
+PLATING:
+Inez: [her version]
+Finlay: [his version - components separated, sauce integrated]
+Adults: [full version]
+FINLAY FALLBACK: [simple pantry alternative]
+SHOPPING: [comma separated ingredient list with quantities]`, FAMILY_CONTEXT
+      );
+      const nameMatch = result.match(/^MEAL:\s*(.+)/im);
+      const name = nameMatch ? nameMatch[1].trim() : meal.name;
+      setWeekendMeals(prev => prev.map(m => m.id === meal.id ? { ...m, name, content: result, kept: true } : m));
+    } catch { alert("Could not regenerate. Please try again."); }
+    setWeekendRegenLoading(false);
   }
 
   async function generateDayPlan() {
-    setDayLoading(true); setDayPlan(null);
+    setDayLoading(true); setDayMeals([]);
     const bank = recipes.filter(r => r.rating >= 3).map(r => r.name);
     const fridgeStock = fridgeItems.length > 0 ? `Currently in fridge: ${fridgeItems.map(f => `${f.name} (${f.portions} portions)`).join(", ")}. Prioritise using these.` : "";
+    const slots = ["BREAKFAST", "MORNING SNACK", "LUNCH", "AFTERNOON SNACK", "DINNER"];
     try {
-      const result = await callGroq(`Plan a full balanced day for Inez. Breakfast, Morning Snack, Lunch, Afternoon Snack, Dinner.
-Different protein each meal. Different carb each meal. Varied veg. Substantial portions (Sotos - she needs significantly more than a typical toddler).
-${includeEggs ? "Include at least one egg meal or egg yolk addition." : ""}
+      const results = await Promise.all(slots.map(slot => callGroq(
+        `Plan ONE meal for Inez (20mo, Sotos syndrome + GERD) for ${slot}.
+${slot === "BREAKFAST" || slot === "MORNING SNACK" || slot === "AFTERNOON SNACK" ? "This is a snack/light meal - still substantial for Sotos." : "This is a main meal - very large portions needed for Sotos syndrome."}
+${includeEggs && slot === "BREAKFAST" ? "Include eggs or egg yolk." : ""}
 ${bank.length ? `Her favourites: ${bank.join(", ")}` : ""}
 ${fridgeStock}
 ${dayNote ? `Note: ${dayNote}` : ""}
-
-Format each meal:
-MEAL NAME
-Protein: / Carb: / Veg: / How to prepare (method, temp, time, texture): / Nutrition note:
-
-End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
-      setDayPlan(result);
-    } catch { setDayPlan("Something went wrong. Please try again."); }
+No chicken, no dairy, no garlic/onion, no acidic food, no apple, no cacao. Must be soft and spoonable.
+Format EXACTLY:
+MEAL: [name]
+Protein: [source] | Carb: [source] | Veg: [source]
+How to prepare: [method, temp, time, texture goal]
+Nutrition note: [key benefits]
+SHOPPING: [comma separated ingredient list with quantities]`, INEZ_CONTEXT
+      )));
+      const meals = slots.map((slot, i) => {
+        const nameMatch = results[i].match(/^MEAL:\s*(.+)/im);
+        return { id: slot, label: slot, name: nameMatch ? nameMatch[1].trim() : slot, content: results[i], kept: true, expanded: false };
+      });
+      setDayMeals(meals);
+    } catch (e) { alert("Something went wrong. Please try again."); }
     setDayLoading(false);
+  }
+
+  async function regenerateDayMeal(meal) {
+    setDayRegenLoading(true);
+    const keep = dayMeals.filter(m => m.kept && m.id !== meal.id).map(m => m.name).join(", ");
+    const bank = recipes.filter(r => r.rating >= 3).map(r => r.name);
+    try {
+      const result = await callGroq(
+        `Plan ONE meal for Inez (20mo, Sotos syndrome + GERD) for ${meal.id}. Must be DIFFERENT from: ${keep}.
+${bank.length ? `Her favourites: ${bank.join(", ")}` : ""}
+No chicken, no dairy, no garlic/onion, no acidic food, no apple, no cacao. Must be soft and spoonable. Large portions for Sotos syndrome.
+Format EXACTLY:
+MEAL: [name]
+Protein: [source] | Carb: [source] | Veg: [source]
+How to prepare: [method, temp, time, texture goal]
+Nutrition note: [key benefits]
+SHOPPING: [comma separated ingredient list with quantities]`, INEZ_CONTEXT
+      );
+      const nameMatch = result.match(/^MEAL:\s*(.+)/im);
+      const name = nameMatch ? nameMatch[1].trim() : meal.name;
+      setDayMeals(prev => prev.map(m => m.id === meal.id ? { ...m, name, content: result, kept: true } : m));
+    } catch { alert("Could not regenerate. Please try again."); }
+    setDayRegenLoading(false);
   }
 
   async function getRecipeIdea() {
@@ -746,20 +784,57 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
         {tab === 2 && <>
           <Card>
             <h2 style={{ margin: "0 0 6px", fontSize: 17, color: "#2c3e50" }}>Inez's Day Planner</h2>
-            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#888", lineHeight: 1.6 }}>Full balanced day — varied proteins, carbs and veg. Prioritises what's in the fridge.</p>
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#888", lineHeight: 1.6 }}>Full balanced day — varied proteins, carbs and veg. Tick meals you like, regenerate the rest.</p>
             <Toggle value={includeEggs} onChange={setIncludeEggs} label="🥚 Include egg ideas" sub="Suggest egg meals and where to add egg yolk" />
             <StableTextarea value={dayNote} onBlur={setDayNote} placeholder="Any notes? e.g. she had fish yesterday..." rows={2} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #eee", fontSize: 13, fontFamily: "Georgia,serif", marginBottom: 14, boxSizing: "border-box", resize: "none" }} />
             <Btn label={dayLoading ? "⏳ Planning Inez's day..." : "☀️ Plan Today's Meals"} onClick={generateDayPlan} disabled={dayLoading} style={{ width: "100%" }} />
           </Card>
-          {dayPlan && <Card><h3 style={{ margin: "0 0 4px", color: "#e76f51", fontSize: 16 }}>☀️ Today's Plan</h3><FormatText text={dayPlan} /><Btn label="🔄 Generate Another Day" onClick={generateDayPlan} disabled={dayLoading} style={{ width: "100%", marginTop: 18 }} /></Card>}
-          {!dayPlan && !dayLoading && <Card><div style={{ textAlign: "center", padding: "20px 0" }}><div style={{ fontSize: 40, marginBottom: 10 }}>☀️</div><p style={{ margin: 0, fontSize: 13, color: "#aaa", lineHeight: 1.6 }}>Plan a nutritionally balanced day for Inez.</p></div></Card>}
+          {dayMeals.length > 0 && <>
+            <div style={{ background: "#f0f8ff", border: "1.5px solid #90cdf4", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#2b6cb0", fontWeight: "bold" }}>Tick meals you want to keep. Untick to replace them.</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {dayMeals.some(m => !m.kept) && <Btn label={dayRegenLoading ? "⏳ Regenerating..." : `🔄 Regenerate ${dayMeals.filter(m => !m.kept).length} Unticked`} onClick={() => Promise.all(dayMeals.filter(m => !m.kept).map(m => regenerateDayMeal(m)))} disabled={dayRegenLoading} color="#2b6cb0" small />}
+                <Btn label="🔄 New Day Plan" onClick={generateDayPlan} disabled={dayLoading} color="#f4a261" small />
+              </div>
+            </div>
+            {dayMeals.map(meal => (
+              <div key={meal.id} style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: 14, border: `2px solid ${meal.kept ? "#f4a261" : "#e0e0e0"}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                  <div onClick={() => setDayMeals(p => p.map(m => m.id === meal.id ? { ...m, kept: !m.kept } : m))} style={{ width: 28, height: 28, borderRadius: 8, border: `2.5px solid ${meal.kept ? "#e76f51" : "#ccc"}`, background: meal.kept ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 2 }}>
+                    {meal.kept && <span style={{ color: "white", fontSize: 15, fontWeight: "bold" }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>{meal.label}</div>
+                    <div style={{ fontSize: 15, color: "#2c3e50", fontWeight: "bold" }}>{meal.name}</div>
+                  </div>
+                </div>
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <div style={{ maxHeight: meal.expanded ? "none" : 120, overflow: "hidden" }}>
+                    <FormatText text={meal.content} baseSize={12} />
+                  </div>
+                  {!meal.expanded && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)", pointerEvents: "none" }} />}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => setDayMeals(p => p.map(m => m.id === meal.id ? { ...m, expanded: !m.expanded } : m))} style={{ padding: "7px 12px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, color: "#c05621", cursor: "pointer", fontWeight: "bold" }}>{meal.expanded ? "▲ Less" : "▼ Full Details"}</button>
+                  <button onClick={() => saveRecipeFromBatch(meal)} style={{ padding: "7px 12px", background: "#f0faf4", border: "1.5px solid #52b788", borderRadius: 8, fontSize: 12, color: "#2d6a4f", cursor: "pointer", fontWeight: "bold" }}>📖 Save to Recipes</button>
+                  <button onClick={() => addRecipeToShoppingList(meal)} disabled={shoppingLoading && shoppingLoadingId === meal.id} style={{ padding: "7px 12px", background: recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#f0faf4" : "#fef9f0", border: `1.5px solid ${recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#52b788" : "#f4a261"}`, borderRadius: 8, fontSize: 12, color: recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#2d6a4f" : "#c05621", cursor: "pointer", fontWeight: "bold" }}>
+                    {shoppingLoading && shoppingLoadingId === meal.id ? "⏳" : recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "✅ In Shopping List" : "🛒 Add to Shopping List"}
+                  </button>
+                  <button onClick={() => setDayMeals(p => p.map(m => m.id === meal.id ? { ...m, kept: !m.kept } : m))} style={{ padding: "7px 12px", background: meal.kept ? "#fff0f0" : "#f0f8ff", border: `1.5px solid ${meal.kept ? "#feb2b2" : "#90cdf4"}`, borderRadius: 8, fontSize: 12, color: meal.kept ? "#c0392b" : "#2b6cb0", cursor: "pointer", fontWeight: "bold" }}>
+                    {meal.kept ? "✕ Replace this" : "✓ Keep this"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>}
+          {dayMeals.length === 0 && !dayLoading && <Card><div style={{ textAlign: "center", padding: "20px 0" }}><div style={{ fontSize: 40, marginBottom: 10 }}>☀️</div><p style={{ margin: 0, fontSize: 13, color: "#aaa", lineHeight: 1.6 }}>Plan a nutritionally balanced day for Inez.</p></div></Card>}
         </>}
 
         {/* WEEKEND */}
         {tab === 3 && <>
           <Card>
             <h2 style={{ margin: "0 0 6px", fontSize: 17, color: "#2c3e50" }}>👨‍👩‍👧‍👦 Weekend Family Meals</h2>
-            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#888", lineHeight: 1.6 }}>Saturday + Sunday lunch and dinner — one meal adapted for everyone.</p>
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#888", lineHeight: 1.6 }}>Saturday + Sunday lunch and dinner — one meal adapted for everyone. Tick to keep, untick to replace.</p>
             <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
               {["👶 Inez", "👦 Finlay", "🍽️ Adults"].map((label, i) => (
                 <div key={i} style={{ padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: "bold", background: i === 0 ? "#fff8f0" : i === 1 ? "#f0f8ff" : "#f5f5f5", border: `1.5px solid ${i === 0 ? "#f4a261" : i === 1 ? "#90cdf4" : "#ddd"}`, color: i === 0 ? "#c05621" : i === 1 ? "#2b6cb0" : "#555" }}>{label}</div>
@@ -768,21 +843,45 @@ End with DAILY NUTRITION SUMMARY.`, INEZ_CONTEXT);
             <StableTextarea value={weekendNote} onBlur={setWeekendNote} placeholder="Any notes? e.g. keep it simple, use up turkey..." rows={2} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #eee", fontSize: 13, fontFamily: "Georgia,serif", marginBottom: 14, boxSizing: "border-box", resize: "none" }} />
             <Btn label={weekendLoading ? "⏳ Planning weekend..." : "🗓️ Plan Our Weekend Meals"} onClick={generateWeekendPlan} disabled={weekendLoading} style={{ width: "100%" }} />
           </Card>
-          {weekendPlan && <>
-            <Card>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, color: "#e76f51", fontSize: 16 }}>🗓️ This Weekend</h3>
-                <Btn label="🖨️ Print" onClick={printWeekend} small color="#555" />
+          {weekendMeals.length > 0 && <>
+            <div style={{ background: "#f0f8ff", border: "1.5px solid #90cdf4", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#2b6cb0", fontWeight: "bold" }}>Tick meals you want to keep. Untick to replace them.</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {weekendMeals.some(m => !m.kept) && <Btn label={weekendRegenLoading ? "⏳ Regenerating..." : `🔄 Regenerate ${weekendMeals.filter(m => !m.kept).length} Unticked`} onClick={() => Promise.all(weekendMeals.filter(m => !m.kept).map(m => regenerateWeekendMeal(m)))} disabled={weekendRegenLoading} color="#2b6cb0" small />}
+                <Btn label="🔄 New Weekend" onClick={generateWeekendPlan} disabled={weekendLoading} color="#f4a261" small />
               </div>
-              <FormatText text={weekendPlan} />
-              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                <Btn label={weekendShoppingLoading ? "⏳" : "🛒 Shopping List"} onClick={generateWeekendShopping} disabled={weekendShoppingLoading} color="#2d6a4f" style={{ flex: 1 }} />
-                <Btn label="🔄 New Weekend" onClick={generateWeekendPlan} disabled={weekendLoading} color="#f4a261" style={{ flex: 1 }} />
+            </div>
+            {weekendMeals.map(meal => (
+              <div key={meal.id} style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: 14, border: `2px solid ${meal.kept ? "#f4a261" : "#e0e0e0"}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                  <div onClick={() => setWeekendMeals(p => p.map(m => m.id === meal.id ? { ...m, kept: !m.kept } : m))} style={{ width: 28, height: 28, borderRadius: 8, border: `2.5px solid ${meal.kept ? "#e76f51" : "#ccc"}`, background: meal.kept ? "#e76f51" : "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 2 }}>
+                    {meal.kept && <span style={{ color: "white", fontSize: 15, fontWeight: "bold" }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>{meal.label}</div>
+                    <div style={{ fontSize: 15, color: "#2c3e50", fontWeight: "bold" }}>{meal.name}</div>
+                  </div>
+                </div>
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <div style={{ maxHeight: meal.expanded ? "none" : 140, overflow: "hidden" }}>
+                    <FormatText text={meal.content} baseSize={12} />
+                  </div>
+                  {!meal.expanded && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: "linear-gradient(transparent, white)", pointerEvents: "none" }} />}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => setWeekendMeals(p => p.map(m => m.id === meal.id ? { ...m, expanded: !m.expanded } : m))} style={{ padding: "7px 12px", background: "#fef9f0", border: "1.5px solid #f4a261", borderRadius: 8, fontSize: 12, color: "#c05621", cursor: "pointer", fontWeight: "bold" }}>{meal.expanded ? "▲ Less" : "▼ Full Details"}</button>
+                  <button onClick={() => saveRecipeFromBatch(meal)} style={{ padding: "7px 12px", background: "#f0faf4", border: "1.5px solid #52b788", borderRadius: 8, fontSize: 12, color: "#2d6a4f", cursor: "pointer", fontWeight: "bold" }}>📖 Save to Recipes</button>
+                  <button onClick={() => addRecipeToShoppingList(meal)} disabled={shoppingLoading && shoppingLoadingId === meal.id} style={{ padding: "7px 12px", background: recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#f0faf4" : "#fef9f0", border: `1.5px solid ${recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#52b788" : "#f4a261"}`, borderRadius: 8, fontSize: 12, color: recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "#2d6a4f" : "#c05621", cursor: "pointer", fontWeight: "bold" }}>
+                    {shoppingLoading && shoppingLoadingId === meal.id ? "⏳" : recipeShoppingItems.find(r => r.recipeNumber === meal.id) ? "✅ In Shopping List" : "🛒 Add to Shopping List"}
+                  </button>
+                  <button onClick={() => setWeekendMeals(p => p.map(m => m.id === meal.id ? { ...m, kept: !m.kept } : m))} style={{ padding: "7px 12px", background: meal.kept ? "#fff0f0" : "#f0f8ff", border: `1.5px solid ${meal.kept ? "#feb2b2" : "#90cdf4"}`, borderRadius: 8, fontSize: 12, color: meal.kept ? "#c0392b" : "#2b6cb0", cursor: "pointer", fontWeight: "bold" }}>
+                    {meal.kept ? "✕ Replace this" : "✓ Keep this"}
+                  </button>
+                </div>
               </div>
-            </Card>
-            {weekendShoppingList && <Card><h3 style={{ margin: "0 0 14px", color: "#2d6a4f", fontSize: 15 }}>🛒 Weekend Shopping List</h3><ShoppingListDisplay text={weekendShoppingList} prefix="weekend" /></Card>}
+            ))}
           </>}
-          {!weekendPlan && !weekendLoading && <Card><div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ fontSize: 44, marginBottom: 12 }}>👨‍👩‍👧‍👦</div><p style={{ margin: 0, fontSize: 13, color: "#aaa", lineHeight: 1.8 }}>Plan Saturday and Sunday meals for the whole family.<br />One meal, adapted for Inez, Finlay and the adults.</p></div></Card>}
+          {weekendMeals.length === 0 && !weekendLoading && <Card><div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ fontSize: 44, marginBottom: 12 }}>👨‍👩‍👧‍👦</div><p style={{ margin: 0, fontSize: 13, color: "#aaa", lineHeight: 1.8 }}>Plan Saturday and Sunday meals for the whole family.<br />One meal, adapted for Inez, Finlay and the adults.</p></div></Card>}
         </>}
 
         {/* RECIPES */}
