@@ -425,8 +425,14 @@ RECIPE 4: [Name] - [Cuisine tradition]
     setWeekendLoading(true); setWeekendMeals([]);
     const slots = ["SATURDAY LUNCH", "SATURDAY DINNER", "SUNDAY LUNCH", "SUNDAY DINNER"];
     try {
-      const results = await Promise.all(slots.map(slot => callGroq(
-        `Plan ONE family meal for ${slot}. ${weekendNote ? `Note: ${weekendNote}` : ""}
+      const meals = [];
+      for (const slot of slots) {
+        const alreadyPlanned = meals.map(m => m.name).join(", ");
+        const avoidNote = alreadyPlanned ? `ALREADY PLANNED THIS WEEKEND - you MUST use a completely different dish, different protein, different carb: ${alreadyPlanned}` : "";
+        const result = await callGroq(
+          `Plan ONE family meal for ${slot}. ${weekendNote ? `Note: ${weekendNote}` : ""}
+${avoidNote}
+All 4 weekend meals must use different proteins and different main carbs. No repeating dishes or proteins across the weekend.
 Works for: Mum (no restrictions), Phil (no restrictions), Finlay (8, fussy - likes pasta/fish/chips, hates veg chunks, sauce must be integrated), Inez (20mo, GERD + Sotos, no chicken/dairy/garlic/onion/acidic food, needs soft moist spoonable high-calorie food).
 Format EXACTLY:
 MEAL: [name]
@@ -440,12 +446,12 @@ Finlay: [his version - components separated, sauce integrated]
 Adults: [full version]
 FINLAY FALLBACK: [simple pantry alternative]
 SHOPPING: [comma separated ingredient list with quantities]`, FAMILY_CONTEXT
-      )));
-      const meals = slots.map((slot, i) => {
-        const nameMatch = results[i].match(/^MEAL:\s*(.+)/im);
-        return { id: slot, label: slot.replace("SATURDAY ", "Sat ").replace("SUNDAY ", "Sun "), name: nameMatch ? nameMatch[1].trim() : slot, content: results[i], kept: true, expanded: false };
-      });
-      setWeekendMeals(meals);
+        );
+        const nameMatch = result.match(/^MEAL:\s*(.+)/im);
+        const meal = { id: slot, label: slot.replace("SATURDAY ", "Sat ").replace("SUNDAY ", "Sun "), name: nameMatch ? nameMatch[1].trim() : slot, content: result, kept: true, expanded: false };
+        meals.push(meal);
+        setWeekendMeals([...meals]);
+      }
     } catch (e) { alert("Something went wrong generating the weekend plan. Please try again."); }
     setWeekendLoading(false);
   }
@@ -919,7 +925,7 @@ SHOPPING: [comma separated ingredient list with quantities]`, INEZ_CONTEXT
                     <h4 style={{ margin: 0, color: "#2c3e50", fontSize: 14 }}>{r.name}</h4>
                     {r.favourite && <span style={{ fontSize: 13 }}>❤️</span>}
                   </div>
-                  <Stars rating={r.rating} />
+                  <Stars rating={r.rating} onChange={(v) => updateRating(r.id, v)} />
                   <p style={{ margin: "4px 0 2px", fontSize: 11, color: rl(r.rating).color, fontWeight: "bold" }}>{rl(r.rating).label}</p>
                   <p style={{ margin: 0, fontSize: 10, color: "#ccc" }}>{r.date}</p>
                 </div>
