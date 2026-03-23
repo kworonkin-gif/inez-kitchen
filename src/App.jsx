@@ -63,6 +63,8 @@ PORTIONS: Very large - she eats more than most adults. 3 big meals + 2 substanti
 NUTRITION - BUILD INTO EVERY RECIPE (do not list as separate check):
 Every recipe must already include: high protein, iron-rich ingredient + vitamin C pairing, calcium alternative, healthy fat (avocado/egg yolk/1 tsp olive oil), high fibre from wholegrains or legumes, zinc from turkey/fish/legumes/oats.
 
+CULINARY SENSE - MANDATORY: Every recipe must work as a real, enjoyable dish that a person would actually want to eat. Ingredients must belong together culinarily, not just nutritionally. Before combining ingredients, ask: would a real chef put these together? Examples of what NOT to do: porridge with rabbit and tofu, oat milk in a savoury tagine, fruit mixed into a protein stew. Grains must suit the cuisine (couscous with Moroccan, rice with Japanese/Thai, pasta with Mediterranean). Proteins must suit the dish style. If a combination sounds odd, it is odd - choose something else. The goal is delicious, real food that happens to be nutritious - not a nutrition shake disguised as a meal.
+
 METHOD CLARITY: Write complete unambiguous instructions. State method, temperature, time, texture goal, how to serve. Never assume the reader knows the method.`;
 
 const FAMILY_CONTEXT = `You are a family meal planner helping a family of 4 with very different dietary needs plan shared weekend meals.
